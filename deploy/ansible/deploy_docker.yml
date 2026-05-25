@@ -1,0 +1,240 @@
+---
+# ── Nash Analysis — Docker Deploy ────────────────────────────────────────────
+#
+# Installs Docker on the target server, clones the repo, writes the .env,
+# and starts the app under docker compose.
+#
+# Prerequisites on control machine:
+#   ssh-keyscan your-server >> ~/.ssh/known_hosts   # first time only
+#
+# First-time setup:
+#   cp deploy/ansible/inventory.ini.example deploy/ansible/inventory.ini
+#   # Edit inventory.ini with your server IP/hostname and SSH user
+#   # Generate credentials: python make_password.py
+#
+# Run (full deploy):
+#   ansible-playbook deploy/ansible/deploy_docker.yml \
+#     -i deploy/ansible/inventory.ini \
+#     -e "nash_password_hash=b64:..." \
+#     -e "secret_key=..."
+#
+# Re-deploy only (pull latest + restart, skip Docker install):
+#   ansible-playbook deploy/ansible/deploy_docker.yml \
+#     -i deploy/ansible/inventory.ini \
+#     -e "nash_password_hash=b64:..." \
+#     -e "secret_key=..." \
+#     --tags deploy
+#
+# Variables (pass via -e "key=value"):
+#   app_repo             Git clone URL          (default: GitHub SSH URL)
+#   app_branch           Branch to deploy       (default: main)
+#   app_dir              Install directory      (default: /opt/nash-events)
+#   app_port             External port          (default: 5051)
+#   nash_username        Login username         (default: admin)
+#   nash_password_hash   bcrypt hash (b64:)     (required — no default)
+#   secret_key           Flask secret key       (required — no default)
+# ─────────────────────────────────────────────────────────────────────────────
+
+- name: Deploy Nash Analysis
+  hosts: nash_events
+  gather_facts: yes
+
+  vars:
+    app_repo:      "git@github.com:mptworkai/nash_analysis.git"
+    app_branch:    "main"
+    app_dir:       "/opt/nash-events"
+    app_port:      5051
+    nash_username: "admin"
+    _arch:    "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' if ansible_facts['architecture'] == 'aarch64' else ansible_facts['architecture'] }}"
+    _distro:  "{{ ansible_facts['distribution'] | lower }}"
+    _release: "{{ ansible_facts['distribution_release'] }}"
+
+  tasks:
+
+    # ── Directories ───────────────────────────────────────────────────────────
+    - name: Create app directory
+      become: yes
+      ansible.builtin.file:
+        path:  "{{ app_dir }}"
+        state: directory
+        mode:  "0755"
+      tags: [bootstrap, deploy]
+
+    # ── Docker install ────────────────────────────────────────────────────────
+    - name: Remove conflicting Docker packages from distro repos
+      become: yes
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-doc
+          - docker-compose
+          - docker-compose-v2
+          - podman-docker
+          - containerd
+          - runc
+        state: absent
+        purge: yes
+      ignore_errors: yes
+      tags: docker
+
+    - name: Install prerequisites for Docker apt repo
+      become: yes
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - git
+        state: present
+        update_cache: yes
+      tags: docker
+
+    - name: Create Docker keyring directory
+      become: yes
+      ansible.builtin.file:
+        path:  /etc/apt/keyrings
+        state: directory
+        mode:  "0755"
+      tags: docker
+
+    - name: Download Docker GPG key
+      become: yes
+      ansible.builtin.shell:
+        cmd: >
+          curl -fsSL https://download.docker.com/linux/{{ _distro }}/gpg
+          | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        creates: /etc/apt/keyrings/docker.gpg
+      tags: docker
+
+    - name: Add Docker apt repository
+      become: yes
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ _arch }} signed-by=/etc/apt/keyrings/docker.gpg]
+          https://download.docker.com/linux/{{ _distro }} {{ _release }} stable
+        state:    present
+        filename: docker
+      tags: docker
+
+    - name: Install Docker CE and Compose plugin
+      become: yes
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+      tags: docker
+
+    - name: Enable and start Docker daemon
+      become: yes
+      ansible.builtin.systemd:
+        name:    docker
+        enabled: yes
+        state:   started
+      tags: docker
+
+    - name: Add deploy user to docker group
+      become: yes
+      ansible.builtin.user:
+        name:   "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      tags: docker
+
+    # ── SSH key for GitHub clone ──────────────────────────────────────────────
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path:  "{{ ansible_env.HOME }}/.ssh"
+        state: directory
+        mode:  "0700"
+      tags: [bootstrap, deploy]
+
+    - name: Add GitHub to known_hosts
+      ansible.builtin.known_hosts:
+        name: github.com
+        key:  "{{ lookup('pipe', 'ssh-keyscan -t ed25519 github.com 2>/dev/null') }}"
+        path: "{{ ansible_env.HOME }}/.ssh/known_hosts"
+        state: present
+      tags: [bootstrap, deploy]
+
+    # ── Repo ──────────────────────────────────────────────────────────────────
+    - name: Clone or update repo
+      ansible.builtin.git:
+        repo:    "{{ app_repo }}"
+        dest:    "{{ app_dir }}"
+        version: "{{ app_branch }}"
+        force:   yes
+      register: git_result
+      tags: deploy
+
+    - name: Show git update status
+      ansible.builtin.debug:
+        msg: "{{ 'Updated to ' + git_result.after[:8] if git_result.changed else 'Already up to date: ' + git_result.after[:8] }}"
+      tags: deploy
+
+    # ── Config ────────────────────────────────────────────────────────────────
+    - name: Write .env file
+      become: yes
+      ansible.builtin.copy:
+        dest:    "{{ app_dir }}/.env"
+        mode:    "0600"
+        owner:   "{{ ansible_user }}"
+        content: |
+          NASH_USERNAME={{ nash_username }}
+          NASH_PASSWORD_HASH={{ nash_password_hash }}
+          SECRET_KEY={{ secret_key }}
+          HOST_PORT={{ app_port }}
+      no_log: true
+      tags: [config, deploy]
+
+    - name: Ensure events.db exists (no-op if already present)
+      become: yes
+      ansible.builtin.file:
+        path:  "{{ app_dir }}/events.db"
+        state: touch
+        mode:  "0644"
+        owner: "{{ ansible_user }}"
+        modification_time: preserve
+        access_time: preserve
+      tags: [config, deploy]
+
+    # ── Deploy ────────────────────────────────────────────────────────────────
+    - name: Build image and start containers
+      become: yes
+      ansible.builtin.command:
+        cmd:   docker compose up -d --build
+        chdir: "{{ app_dir }}"
+      changed_when: true
+      tags: deploy
+
+    - name: Wait for app to respond
+      ansible.builtin.uri:
+        url:         "http://localhost:{{ app_port }}/login"
+        status_code: 200
+      register: health
+      retries: 12
+      delay:   5
+      until:   health.status == 200
+      tags: deploy
+
+    # ── Summary ───────────────────────────────────────────────────────────────
+    - name: Deployment complete
+      ansible.builtin.debug:
+        msg:
+          - "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          - "  Nash Analysis deployed"
+          - "  URL    : http://{{ inventory_hostname }}:{{ app_port }}"
+          - "  Dir    : {{ app_dir }}"
+          - "  Branch : {{ app_branch }} @ {{ git_result.after[:8] }}"
+          - "  DB     : {{ app_dir }}/events.db (bind-mounted into container)"
+          - "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          - "  Useful commands on the server:"
+          - "  docker compose -f {{ app_dir }}/docker-compose.yml ps"
+          - "  docker compose -f {{ app_dir }}/docker-compose.yml logs -f"
+          - "  docker compose -f {{ app_dir }}/docker-compose.yml restart"
+          - "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      tags: deploy

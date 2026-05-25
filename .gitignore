@@ -11,3 +11,4 @@ input/
 michael_anthony/
 header_report.txt
 name_mapping.csv
+deploy/ansible/inventory.ini
