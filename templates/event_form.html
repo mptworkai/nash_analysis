@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}{% if event_id %}Edit Event{% else %}New Event{% endif %}{% endblock %}
+{% block content %}
+
+<h1>{% if event_id %}Edit event #{{ event_id }}{% else %}New event{% endif %}</h1>
+
+{% if error %}
+<div class="card" style="border-color:#dc2626;background:#fef2f2;color:#991b1b;margin-bottom:14px">
+  <strong>{{ error }}</strong>
+</div>
+{% endif %}
+
+<form method="post" id="event-form" autocomplete="off">
+
+<div class="grid">
+
+  <div class="card">
+    <h2>Event</h2>
+    <dl class="kv">
+      <dt>Date *</dt>
+      <dd><input type="date" name="date" value="{{ ev.date }}" required></dd>
+      <dt>Name *</dt>
+      <dd><input type="text" name="name" value="{{ ev.name|e }}" required style="width:260px"></dd>
+      <dt>Series</dt>
+      <dd><input type="text" name="series" value="{{ ev.series|e }}" list="series-list" style="width:200px"></dd>
+      <dt>Program</dt>
+      <dd>
+        <select name="program">
+          <option value="">—</option>
+          {% for p in programs %}
+            <option value="{{ p }}" {% if ev.program == p %}selected{% endif %}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </dd>
+      <dt>Notes</dt>
+      <dd><textarea name="notes" rows="3" style="width:260px">{{ ev.notes|e }}</textarea></dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Artists</h2>
+    <p class="meta" id="share-warning"></p>
+    <div id="artists">
+      {% for a in artists %}
+      <div class="artist-row">
+        <input type="text" name="artist_name" value="{{ a.name|e }}" list="artist-list" placeholder="Artist name">
+        <select name="artist_role">
+          <option value="">role…</option>
+          {% for r in roles %}<option value="{{ r }}" {% if a.role == r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+        </select>
+        <input type="number" name="artist_share" value="{{ a.share_pct or 100 }}" min="0" max="100" step="0.1" class="share">
+        <span>%</span>
+        <button type="button" class="remove-artist" title="Remove">✕</button>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" id="add-artist">+ Add artist</button>
+  </div>
+
+  <div class="card">
+    <h2>Revenue</h2>
+    <dl class="kv">
+      {% for c, label in revenue_cols %}
+        <dt>{{ label }}</dt>
+        <dd><input type="number" name="{{ c }}" value="{{ ev[c] if ev[c] else '' }}" step="0.01" class="money rev"></dd>
+      {% endfor %}
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Expense</h2>
+    <dl class="kv">
+      {% for c, label in expense_cols %}
+        <dt>{{ label }}{% if c == 'food_beverage_expense' %} <span class="meta" title="Cost of concessions sold (food, beverage)">ⓘ</span>{% endif %}</dt>
+        <dd><input type="number" name="{{ c }}" value="{{ ev[c] if ev[c] else '' }}" step="0.01" class="money exp"></dd>
+      {% endfor %}
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Attendance</h2>
+    <dl class="kv">
+      {% for c, label in count_cols %}
+        <dt>{{ label }}</dt>
+        <dd><input type="number" name="{{ c }}" value="{{ ev[c] if ev[c] else '' }}" step="1" min="0" class="tix-part"></dd>
+      {% endfor %}
+      <dt style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">Total Tickets Sold</dt>
+      <dd style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">
+        <span id="tix-total">{{ ((ev.full_price_tickets or 0) + (ev.discount_tickets or 0) + (ev.comp_tickets or 0)) or (ev.tickets_sold or 0) }}</span>
+      </dd>
+    </dl>
+  </div>
+
+</div>
+
+<div id="footer">
+  <span>Revenue <strong id="rev-total">$0</strong></span>
+  <span>Expense <strong id="exp-total">$0</strong></span>
+  <span>Margin <strong id="margin">$0</strong> <span id="margin-pct" class="meta"></span></span>
+  <span style="flex:1"></span>
+  <a href="{% if event_id %}/event/{{ event_id }}{% else %}/{% endif %}" class="btn btn-cancel">Cancel</a>
+  <button type="submit" class="btn btn-primary">{% if event_id %}Save changes{% else %}Save event{% endif %}</button>
+</div>
+
+</form>
+
+<datalist id="artist-list">
+  {% for n in all_artists %}<option value="{{ n|e }}">{% endfor %}
+</datalist>
+<datalist id="series-list">
+  {% for s in series_list %}<option value="{{ s|e }}">{% endfor %}
+</datalist>
+
+<style>
+  .artist-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .artist-row input[type=text] { flex: 1; padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px; }
+  .artist-row select, .artist-row .share { padding: 5px 6px; border: 1px solid #d1d5db; border-radius: 4px; }
+  .artist-row .share { width: 60px; text-align: right; }
+  .artist-row .remove-artist { background: #e5e7eb; border: 0; border-radius: 4px;
+                               color: #6b7280; padding: 4px 8px; cursor: pointer; }
+  .artist-row .remove-artist:hover { background: #fee2e2; color: #991b1b; }
+  #add-artist { margin-top: 6px; padding: 4px 10px; background: #f3f4f6; border: 1px dashed #9ca3af;
+                border-radius: 4px; cursor: pointer; color: #374151; }
+  input.money, dd input[type=number], dd input[type=text], dd input[type=date], dd textarea, dd select {
+    padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 4px;
+    font-family: inherit; font-size: 13px; width: 140px;
+    font-variant-numeric: tabular-nums; text-align: right;
+  }
+  dd input[type=text], dd input[type=date], dd textarea, dd select { text-align: left; }
+  dd textarea { width: 260px; resize: vertical; }
+  #footer { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e5e7eb;
+            padding: 12px 16px; margin: 18px -24px -18px; display: flex; gap: 24px;
+            align-items: center; font-variant-numeric: tabular-nums; }
+  #footer strong { font-size: 16px; }
+  .btn { padding: 8px 16px; border-radius: 5px; border: 0; cursor: pointer;
+         text-decoration: none; font: inherit; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-cancel { background: #e5e7eb; color: #374151; }
+  .btn-cancel:hover { background: #d1d5db; }
+  #share-warning { margin: 0 0 8px; min-height: 1em; }
+  #share-warning.warn { color: #b45309; }
+</style>
+
+<script>
+(function() {
+  const fmt = v => v >= 0 ? '$' + v.toLocaleString(undefined, {maximumFractionDigits: 0})
+                          : '-$' + (-v).toLocaleString(undefined, {maximumFractionDigits: 0});
+  const ROLES = {{ roles|tojson }};
+
+  function recalc() {
+    let rev = 0, exp = 0;
+    document.querySelectorAll('input.rev').forEach(i => rev += parseFloat(i.value) || 0);
+    document.querySelectorAll('input.exp').forEach(i => exp += parseFloat(i.value) || 0);
+    const margin = rev - exp;
+    document.getElementById('rev-total').textContent = fmt(rev);
+    document.getElementById('exp-total').textContent = fmt(exp);
+    const marginEl = document.getElementById('margin');
+    marginEl.textContent = fmt(margin);
+    marginEl.className = margin >= 0 ? 'pos' : 'neg';
+    document.getElementById('margin-pct').textContent =
+      rev > 0 ? '(' + ((margin / rev) * 100).toFixed(1) + '%)' : '';
+  }
+
+  function checkShares() {
+    const shares = Array.from(document.querySelectorAll('input.share'))
+      .map(i => parseFloat(i.value) || 0);
+    const total = shares.reduce((a, b) => a + b, 0);
+    const warn = document.getElementById('share-warning');
+    if (shares.length === 0) {
+      warn.textContent = ''; warn.className = '';
+    } else if (Math.abs(total - 100) > 0.01) {
+      warn.textContent = `Shares total ${total.toFixed(1)}% (should sum to 100%).`;
+      warn.className = 'warn';
+    } else {
+      warn.textContent = `Shares total 100%. ✓`;
+      warn.className = 'meta';
+    }
+  }
+
+  function newRow(name='', role='', share='') {
+    const wrap = document.createElement('div');
+    wrap.className = 'artist-row';
+    wrap.innerHTML = `
+      <input type="text" name="artist_name" value="${name.replace(/"/g,'&quot;')}" list="artist-list" placeholder="Artist name">
+      <select name="artist_role">
+        <option value="">role…</option>
+        ${ROLES.map(r => `<option value="${r}" ${r===role?'selected':''}>${r}</option>`).join('')}
+      </select>
+      <input type="number" name="artist_share" value="${share || 100}" min="0" max="100" step="0.1" class="share">
+      <span>%</span>
+      <button type="button" class="remove-artist" title="Remove">✕</button>
+    `;
+    return wrap;
+  }
+
+  document.getElementById('add-artist').addEventListener('click', () => {
+    document.getElementById('artists').appendChild(newRow());
+    rebalance();
+    checkShares();
+  });
+
+  function rebalance() {
+    // when adding a row, suggest even shares (but only on add — don't overwrite manual edits)
+    const rows = document.querySelectorAll('#artists .artist-row .share');
+    if (rows.length <= 1) {
+      if (rows.length === 1) rows[0].value = 100;
+      return;
+    }
+    // only auto-balance if all currently equal & sum to 100 (or last added still showing 100)
+    const vals = Array.from(rows).map(r => parseFloat(r.value) || 0);
+    const total = vals.reduce((a, b) => a + b, 0);
+    if (Math.abs(total - (100 + 100)) < 0.01 || total === 200) {
+      // a fresh row was added — split evenly
+      const even = +(100 / rows.length).toFixed(2);
+      rows.forEach(r => r.value = even);
+    }
+  }
+
+  document.getElementById('artists').addEventListener('click', e => {
+    if (e.target.classList.contains('remove-artist')) {
+      e.target.closest('.artist-row').remove();
+      checkShares();
+    }
+  });
+
+  document.getElementById('event-form').addEventListener('input', e => {
+    if (e.target.classList.contains('rev') || e.target.classList.contains('exp')) recalc();
+    if (e.target.classList.contains('share')) checkShares();
+  });
+
+  // seed an empty row if none
+  if (!document.querySelectorAll('#artists .artist-row').length) {
+    document.getElementById('artists').appendChild(newRow('', '', 100));
+  }
+
+  function recalcTix() {
+    const total = Array.from(document.querySelectorAll('input.tix-part'))
+      .reduce((s, i) => s + (parseInt(i.value) || 0), 0);
+    document.getElementById('tix-total').textContent = total || '';
+  }
+
+  document.getElementById('event-form').addEventListener('input', e => {
+    if (e.target.classList.contains('tix-part')) recalcTix();
+  });
+
+  recalc();
+  recalcTix();
+  checkShares();
+
+  // focus where it makes sense
+  const nameInput = document.querySelector('input[name=name]');
+  if (nameInput && !nameInput.value) nameInput.focus();
+})();
+</script>
+
+{% endblock %}

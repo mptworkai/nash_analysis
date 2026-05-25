@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.env
+*.db
+*.xlsx
+csv_export/
+mod_excel/
+input/
+michael_anthony/
+header_report.txt
+name_mapping.csv

@@ -1,0 +1,12 @@
+services:
+  nash:
+    build: .
+    image: nash-events:latest
+    container_name: nash-events
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-5050}:5050"
+    env_file:
+      - .env
+    volumes:
+      - ./events.db:/data/events.db

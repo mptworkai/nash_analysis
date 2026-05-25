@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Artists{% endblock %}
+{% block content %}
+
+<h1>Artists</h1>
+<div class="meta" style="margin-bottom:8px">{{ rows|length }} artists, ranked by total revenue across all their shows.</div>
+
+<table>
+<thead>
+<tr>
+  <th>Artist</th>
+  <th class="num">Shows</th>
+  <th class="num">Revenue</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td><a class="event-link" href="/artist/{{ r.artist_id }}">{{ r.name }}</a></td>
+  <td class="num">{{ r.shows|intf }}</td>
+  <td class="num">{{ r.revenue|money }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+{% endblock %}

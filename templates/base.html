@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{% block title %}Nash Events{% endblock %}</title>
+<style>
+  body { font: 14px/1.4 -apple-system, BlinkMacSystemFont, sans-serif;
+         margin: 0; color: #222; background: #fafafa; }
+  header { background: #1f2937; color: #fff; padding: 12px 24px;
+           display: flex; gap: 24px; align-items: center; }
+  header a { color: #fff; text-decoration: none; font-weight: 600; }
+  header a:hover { text-decoration: underline; }
+  header .brand { font-size: 18px; }
+  main { padding: 18px 24px; max-width: 1400px; margin: 0 auto; }
+  h1 { margin: 6px 0 14px; font-size: 22px; }
+  h2 { margin: 18px 0 8px; font-size: 16px; color: #374151; }
+  form.filters { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 16px;
+                 background: #fff; padding: 10px 12px; border: 1px solid #e5e7eb;
+                 border-radius: 6px; }
+  form.filters input, form.filters select { padding: 5px 8px; font-size: 13px;
+                                            border: 1px solid #d1d5db; border-radius: 4px; }
+  form.filters button { padding: 5px 12px; font-size: 13px; cursor: pointer;
+                        background: #2563eb; color: #fff; border: 0; border-radius: 4px; }
+  form.filters button.clear { background: #6b7280; }
+  table { width: 100%; border-collapse: collapse; background: #fff;
+          border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden; }
+  th, td { padding: 7px 10px; text-align: left; border-bottom: 1px solid #f3f4f6; }
+  th { background: #f9fafb; font-weight: 600; color: #374151; font-size: 12px;
+       text-transform: uppercase; letter-spacing: 0.04em; }
+  th a { color: #374151; text-decoration: none; }
+  th a:hover { color: #2563eb; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  th.num { text-align: right; }
+  tr:hover td { background: #f9fafb; }
+  tr.totals td { background: #f3f4f6; font-weight: 600; border-top: 2px solid #d1d5db; }
+  .pos { color: #047857; }
+  .neg { color: #b91c1c; }
+  .pill { display: inline-block; padding: 1px 8px; background: #e5e7eb;
+          border-radius: 10px; font-size: 11px; color: #374151; }
+  a.event-link { color: #2563eb; text-decoration: none; }
+  a.event-link:hover { text-decoration: underline; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+          padding: 14px 16px; }
+  .meta { color: #6b7280; font-size: 12px; }
+  dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px;
+          margin: 8px 0 0; }
+  dl.kv dt { color: #6b7280; }
+  dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .flash { background: #065f46; color: #d1fae5; padding: 3px 10px; border-radius: 12px;
+           font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">Nash Events</span>
+  <a href="/">Events</a>
+  <a href="/artists">Artists</a>
+  <a href="/event/new">+ New Event</a>
+  <span style="margin-left:auto" class="meta">{{ self.title() }}</span>
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}
+      <span class="flash">{{ msgs[0] }}</span>
+    {% endif %}
+  {% endwith %}
+  {% if session.user %}
+    <a href="/logout" class="meta" style="font-weight:400">{{ session.user }} · sign out</a>
+  {% endif %}
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

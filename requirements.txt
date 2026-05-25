@@ -1,0 +1,4 @@
+flask>=3.1
+bcrypt>=4.2
+gunicorn>=23.0
+openpyxl>=3.1

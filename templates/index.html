@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Events{% endblock %}
+{% block content %}
+
+{% macro sortlink(field, label, num=false) %}
+  {% set new_order = 'asc' if sort == field and order == 'desc' else 'desc' %}
+  {% set qs = 'q=' ~ q ~ '&series=' ~ series ~ '&program=' ~ program ~ '&fy=' ~ fy ~ '&sort=' ~ field ~ '&order=' ~ new_order %}
+  <a href="?{{ qs }}">{{ label }}{% if sort == field %}{% if order == 'desc' %} ↓{% else %} ↑{% endif %}{% endif %}</a>
+{% endmacro %}
+
+<h1>Events</h1>
+
+<form class="filters" method="get">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search by name…" />
+  <select name="series">
+    <option value="">— series —</option>
+    {% for s in series_list %}<option value="{{ s }}" {% if s == series %}selected{% endif %}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="program">
+    <option value="">— program —</option>
+    {% for p in program_list %}<option value="{{ p }}" {% if p == program %}selected{% endif %}>{{ p }}</option>{% endfor %}
+  </select>
+  <select name="fy">
+    <option value="">— fiscal year —</option>
+    {% for f in fy_list %}<option value="{{ f }}" {% if f|string == fy|string %}selected{% endif %}>FY{{ f }}</option>{% endfor %}
+  </select>
+  <button type="submit">Filter</button>
+  <a class="pill" href="/">clear</a>
+</form>
+
+<div class="meta" style="margin-bottom:8px">
+  {{ totals.n or 0 }} events &middot; revenue {{ totals.rev|money }} &middot;
+  expense {{ totals.exp|money }} &middot; margin {{ totals.margin|money }}
+</div>
+
+<table>
+<thead>
+<tr>
+  <th>{{ sortlink('date','Date') }}</th>
+  <th>{{ sortlink('name','Event') }}</th>
+  <th>{{ sortlink('series','Series') }}</th>
+  <th>{{ sortlink('program','Program') }}</th>
+  <th>{{ sortlink('fiscal_year','FY') }}</th>
+  <th class="num">{{ sortlink('tickets_sold','Tickets') }}</th>
+  <th class="num">{{ sortlink('revenue','Revenue') }}</th>
+  <th class="num">{{ sortlink('expense','Expense') }}</th>
+  <th class="num">{{ sortlink('margin','Margin') }}</th>
+  <th></th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td>{{ r.date }}</td>
+  <td><a class="event-link" href="/event/{{ r.event_id }}">{{ r.name }}</a></td>
+  <td>{% if r.series %}<span class="pill">{{ r.series }}</span>{% endif %}</td>
+  <td>{% if r.program %}<span class="pill">{{ r.program }}</span>{% endif %}</td>
+  <td>FY{{ r.fiscal_year }}</td>
+  <td class="num">{{ r.tickets_sold|intf }}</td>
+  <td class="num">{{ r.revenue|money }}</td>
+  <td class="num">{{ r.expense|money }}</td>
+  <td class="num {% if r.margin and r.margin >= 0 %}pos{% elif r.margin %}neg{% endif %}">{{ r.margin|money }}</td>
+  <td>
+    <form method="post" action="/event/{{ r.event_id }}/delete" style="margin:0"
+        onsubmit="return confirm('Delete {{ r.name|e }} ({{ r.date }})? This cannot be undone.')">
+      <button type="submit" class="btn-del">✕</button>
+    </form>
+  </td>
+</tr>
+{% endfor %}
+<tr class="totals">
+  <td colspan="6">Total ({{ totals.n }} events)</td>
+  <td class="num">{{ totals.rev|money }}</td>
+  <td class="num">{{ totals.exp|money }}</td>
+  <td class="num {% if totals.margin and totals.margin >= 0 %}pos{% elif totals.margin %}neg{% endif %}">{{ totals.margin|money }}</td>
+  <td></td>
+</tr>
+</tbody>
+</table>
+
+{% if rows|length >= 1000 %}
+<p class="meta">Showing first 1000 — narrow your filter to see more.</p>
+{% endif %}
+
+<style>
+  .btn-del { background: none; border: none; color: #9ca3af; cursor: pointer;
+             font-size: 13px; padding: 2px 6px; border-radius: 3px; }
+  .btn-del:hover { background: #fee2e2; color: #dc2626; }
+</style>
+{% endblock %}

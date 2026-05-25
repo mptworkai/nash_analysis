@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ ev.name }} — {{ ev.date }}{% endblock %}
+{% block content %}
+
+<h1>{{ ev.name }}</h1>
+<div class="meta">
+  {{ ev.date }}
+  {% if ev.series %}&middot; <span class="pill">{{ ev.series }}</span>{% endif %}
+  {% if ev.program %}&middot; <span class="pill">{{ ev.program }}</span>{% endif %}
+  &middot; FY{{ ev.fiscal_year }}
+  &middot; <a href="/event/{{ ev.event_id }}/edit">Edit</a>
+  &middot; <form method="post" action="/event/{{ ev.event_id }}/duplicate" style="display:inline">
+      <button type="submit" class="btn-dup">Duplicate</button>
+    </form>
+  &middot; <a href="/?fy={{ ev.fiscal_year }}">↩ back to events</a>
+  &middot; <form method="post" action="/event/{{ ev.event_id }}/delete" style="display:inline"
+              onsubmit="return confirm('Delete {{ ev.name|e }} ({{ ev.date }})? This cannot be undone.')">
+      <button type="submit" class="btn-delete">Delete</button>
+    </form>
+</div>
+
+<style>
+  .btn-delete { background: none; border: none; color: #dc2626; cursor: pointer;
+                font: inherit; font-size: 13px; padding: 0; text-decoration: underline; }
+  .btn-delete:hover { color: #991b1b; }
+  .btn-dup { background: none; border: none; color: #2563eb; cursor: pointer;
+             font: inherit; font-size: 13px; padding: 0; text-decoration: underline; }
+  .btn-dup:hover { color: #1d4ed8; }
+</style>
+{% if ev.notes %}<p class="meta" style="margin-top:6px">{{ ev.notes }}</p>{% endif %}
+
+<div style="margin-top:14px;margin-bottom:6px;text-align:right">
+  <button id="toggle-calc" class="btn-calc">Show calculations</button>
+</div>
+
+<div class="grid" id="finance-grid">
+  <div class="card">
+    <h2>Revenue</h2>
+    <dl class="kv">
+      {% set rev_parts = [] %}
+      {% for col, label in revenue_cols %}
+        {% if ev[col] %}
+          <dt>{{ label }}</dt><dd>{{ ev[col]|money }}</dd>
+          {% set _ = rev_parts.append(ev[col]|money ~ ' ' ~ label) %}
+        {% endif %}
+      {% endfor %}
+      <dt style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">Total Revenue</dt>
+      <dd style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">
+        {{ revenue|money }}
+        {% if rev_parts|length > 1 %}
+          <span class="calc">= {{ rev_parts|join(' + ') }}</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Expense</h2>
+    <dl class="kv">
+      {% set exp_parts = [] %}
+      {% for col, label in expense_cols %}
+        {% if ev[col] %}
+          <dt>{{ label }}</dt><dd>{{ ev[col]|money }}</dd>
+          {% set _ = exp_parts.append(ev[col]|money ~ ' ' ~ label) %}
+        {% endif %}
+      {% endfor %}
+      <dt style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">Total Expense</dt>
+      <dd style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">
+        {{ expense|money }}
+        {% if exp_parts|length > 1 %}
+          <span class="calc">= {{ exp_parts|join(' + ') }}</span>
+        {% endif %}
+      </dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Attendance</h2>
+    <dl class="kv">
+      {% set component_total = (ev.full_price_tickets or 0) + (ev.discount_tickets or 0) + (ev.comp_tickets or 0) %}
+      {% set display_total = component_total if component_total > 0 else (ev.tickets_sold or 0) %}
+      {% for col, label in count_cols %}
+        {% if ev[col] %}<dt>{{ label }}</dt><dd>{{ ev[col]|intf }}</dd>{% endif %}
+      {% endfor %}
+      {% if display_total %}
+        <dt style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">Total Tickets</dt>
+        <dd style="border-top:1px solid #e5e7eb;padding-top:4px;margin-top:4px;font-weight:600">
+          {{ display_total|intf }}
+          {% if component_total > 0 %}
+            <span class="calc">= {{ (ev.full_price_tickets or 0)|intf }} full + {{ (ev.discount_tickets or 0)|intf }} discount + {{ (ev.comp_tickets or 0)|intf }} comp</span>
+          {% endif %}
+        </dd>
+      {% endif %}
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Margin</h2>
+    <p style="font-size:28px;margin:0" class="{% if margin >= 0 %}pos{% else %}neg{% endif %}">
+      {{ margin|money }}
+    </p>
+    <p class="calc" style="margin:4px 0 0;font-size:12px">
+      = {{ revenue|money }} revenue − {{ expense|money }} expense
+    </p>
+    {% if revenue and revenue > 0 %}
+    <p class="meta">
+      Gross margin: {{ ((margin / revenue) * 100)|round(1) }}%
+      <span class="calc">= {{ margin|money }} ÷ {{ revenue|money }}</span>
+    </p>
+    {% endif %}
+  </div>
+</div>
+
+<h2>Performers</h2>
+<ul>
+  {% for a in artists %}
+    <li><a class="event-link" href="/artist/{{ a.artist_id }}">{{ a.name }}</a>
+        {% if a.role %} <span class="pill">{{ a.role }}</span>{% endif %}
+        {% if a.share_pct is not none and a.share_pct != 100 %}
+          {% set share_rev = (revenue * a.share_pct / 100) %}
+          <span class="meta">
+            share {{ a.share_pct }}%
+            &middot; revenue {{ share_rev|money }}
+            <span class="calc">= {{ revenue|money }} total × {{ a.share_pct }}%</span>
+          </span>
+        {% else %}
+          <span class="calc meta">revenue {{ revenue|money }} (100% share)</span>
+        {% endif %}
+    </li>
+  {% else %}
+    <li class="meta">(none)</li>
+  {% endfor %}
+</ul>
+
+<style>
+  .calc { display: none; color: #6b7280; font-size: 11px; font-style: italic; margin-left: 6px; }
+  #finance-grid.show-calc .calc { display: inline; }
+  .artist-calcs .calc { display: inline; }
+  .btn-calc { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px;
+              padding: 3px 10px; font-size: 12px; color: #374151; cursor: pointer; }
+  .btn-calc:hover { background: #e5e7eb; }
+  .btn-calc.active { background: #dbeafe; border-color: #93c5fd; color: #1e40af; }
+</style>
+
+<script>
+(function() {
+  const btn = document.getElementById('toggle-calc');
+  const grid = document.getElementById('finance-grid');
+  const artistList = document.querySelector('ul');
+  btn.addEventListener('click', function() {
+    const on = grid.classList.toggle('show-calc');
+    artistList.classList.toggle('artist-calcs', on);
+    btn.textContent = on ? 'Hide calculations' : 'Show calculations';
+    btn.classList.toggle('active', on);
+  });
+})();
+</script>
+
+{% if extras %}
+<h2>Other line items <span class="meta">(spreadsheet computed totals & extra metrics)</span></h2>
+<table style="max-width:560px">
+<thead><tr><th>Metric</th><th class="num">Value</th></tr></thead>
+<tbody>
+{% for x in extras %}
+  <tr><td>{{ x.metric }}</td><td class="num">{{ x.value|money if x.value > 5 else '%.3f'|format(x.value) }}</td></tr>
+{% endfor %}
+</tbody>
+</table>
+{% endif %}
+
+<p class="meta" style="margin-top:24px">
+  source: {{ ev.source_file }} &middot; sheet: {{ ev.sheet }}
+</p>
+
+{% endblock %}

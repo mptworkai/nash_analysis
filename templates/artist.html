@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ artist.name }}{% endblock %}
+{% block content %}
+
+<h1>{{ artist.name }}</h1>
+<div class="meta">
+  {{ totals.n }} shows &middot;
+  revenue {{ totals.rev|money }} &middot;
+  expense {{ totals.exp|money }} &middot;
+  margin {{ totals.margin|money }} &middot;
+  <a href="/artists">↩ back to artists</a>
+  &middot; <form method="post" action="/artist/{{ artist.artist_id }}/delete" style="display:inline"
+      onsubmit="return confirm('Delete artist {{ artist.name|e }}? This removes them from all events and cannot be undone.')">
+    <button type="submit" class="btn-delete">Delete artist</button>
+  </form>
+</div>
+
+<style>
+  .btn-delete { background: none; border: none; color: #dc2626; cursor: pointer;
+                font: inherit; font-size: 13px; padding: 0; text-decoration: underline; }
+  .btn-delete:hover { color: #991b1b; }
+</style>
+
+<table style="margin-top:14px">
+<thead>
+<tr>
+  <th>Date</th>
+  <th>Event</th>
+  <th>Series</th>
+  <th>FY</th>
+  <th class="num">Share</th>
+  <th class="num">Tickets</th>
+  <th class="num">Revenue</th>
+  <th class="num">Expense</th>
+  <th class="num">Margin</th>
+</tr>
+</thead>
+<tbody>
+{% for r in rows %}
+<tr>
+  <td>{{ r.date }}</td>
+  <td><a class="event-link" href="/event/{{ r.event_id }}">{{ r.name }}</a></td>
+  <td>{% if r.series %}<span class="pill">{{ r.series }}</span>{% endif %}</td>
+  <td>FY{{ r.fiscal_year }}</td>
+  <td class="num">{% if r.share_pct != 100 %}{{ r.share_pct }}%{% endif %}</td>
+  <td class="num">{{ r.tickets_sold|intf }}</td>
+  <td class="num">{{ r.revenue|money }}</td>
+  <td class="num">{{ r.expense|money }}</td>
+  <td class="num {% if r.margin and r.margin >= 0 %}pos{% elif r.margin %}neg{% endif %}">{{ r.margin|money }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+
+{% endblock %}
