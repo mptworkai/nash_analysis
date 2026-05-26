@@ -47,8 +47,9 @@
           margin: 8px 0 0; }
   dl.kv dt { color: #6b7280; }
   dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
-  .flash { background: #065f46; color: #d1fae5; padding: 3px 10px; border-radius: 12px;
-           font-size: 12px; }
+  .flash    { padding: 3px 10px; border-radius: 12px; font-size: 12px; }
+  .flash-ok  { background: #065f46; color: #d1fae5; }
+  .flash-err { background: #7f1d1d; color: #fee2e2; }
 </style>
 </head>
 <body>
@@ -58,9 +59,9 @@
   <a href="/artists">Artists</a>
   <a href="/event/new">+ New Event</a>
   <span style="margin-left:auto" class="meta">{{ self.title() }}</span>
-  {% with msgs = get_flashed_messages() %}
+  {% with msgs = get_flashed_messages(with_categories=true) %}
     {% if msgs %}
-      <span class="flash">{{ msgs[0] }}</span>
+      <span class="flash flash-{{ msgs[0][0] }}">{{ msgs[0][1] }}</span>
     {% endif %}
   {% endwith %}
   {% if session.user %}

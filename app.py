@@ -86,7 +86,7 @@ EXP_SUM = " + ".join(c for c, _ in EXPENSE_COLS)
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
+        g.db = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
         g.db.row_factory = sqlite3.Row
         g.db.execute("PRAGMA foreign_keys = ON")
     return g.db
@@ -191,8 +191,8 @@ def create_app():
     app.secret_key = SECRET_KEY or "nash-local-dev-CHANGE-ME"
     app.permanent_session_lifetime = _dt.timedelta(days=14)
 
-    with app.app_context():
-        ensure_schema(get_db())
+    with sqlite3.connect(DB_PATH) as _init_db:
+        ensure_schema(_init_db)
 
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -503,10 +503,15 @@ def create_app():
         ev = db.execute("SELECT name, date FROM event WHERE event_id = ?", [event_id]).fetchone()
         if not ev:
             abort(404)
-        db.execute("DELETE FROM event_artist WHERE event_id = ?", [event_id])
-        db.execute("DELETE FROM event_metric  WHERE event_id = ?", [event_id])
-        db.execute("DELETE FROM event          WHERE event_id = ?", [event_id])
-        db.commit()
+        try:
+            db.execute("DELETE FROM event_artist WHERE event_id = ?", [event_id])
+            db.execute("DELETE FROM event_metric  WHERE event_id = ?", [event_id])
+            db.execute("DELETE FROM event          WHERE event_id = ?", [event_id])
+            db.commit()
+        except sqlite3.Error as exc:
+            db.rollback()
+            flash(f"Could not delete event: {exc}", "err")
+            return redirect(url_for("event_detail", event_id=event_id))
         flash(f"Deleted event: {ev['name']} ({ev['date']}).", "ok")
         return redirect(url_for("index"))
 
@@ -562,9 +567,14 @@ def create_app():
         a = db.execute("SELECT name FROM artist WHERE artist_id = ?", [artist_id]).fetchone()
         if not a:
             abort(404)
-        db.execute("DELETE FROM event_artist WHERE artist_id = ?", [artist_id])
-        db.execute("DELETE FROM artist WHERE artist_id = ?", [artist_id])
-        db.commit()
+        try:
+            db.execute("DELETE FROM event_artist WHERE artist_id = ?", [artist_id])
+            db.execute("DELETE FROM artist WHERE artist_id = ?", [artist_id])
+            db.commit()
+        except sqlite3.Error as exc:
+            db.rollback()
+            flash(f"Could not delete artist: {exc}", "err")
+            return redirect(url_for("artist_detail", artist_id=artist_id))
         flash(f"Deleted artist: {a['name']}.", "ok")
         return redirect(url_for("artists"))
 
